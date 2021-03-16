@@ -45,6 +45,7 @@ io.on('connection', (socket) => {
 			io.emit('games', getGames());
 			socket.emit('color', color);
 		}
+		// TODO: try socket.broadcast.emit instead of io.emit
 		io.emit('games', getGames());
 	});
 
@@ -52,6 +53,13 @@ io.on('connection', (socket) => {
 	socket.on('move-piece', (move) => {
 		movePiece({ player: socket, move });
 		io.emit('games', getGames());
+	});
+
+	// Reset game
+	socket.on('reset-game', (gameId) => {
+		setResetGame(gameId);
+		io.emit('games', getGames());
+		setResetGame(gameId);
 	});
 
 	// Player disconnects from the website
@@ -70,6 +78,7 @@ function createGame({ player, gameName }) {
 		],
 		chat: [],
 		id: nextGameId++,
+		resetGame: false,
 	};
 	games.push(game);
 	return game;
@@ -106,7 +115,14 @@ const getGameForPlayer = (player) =>
 const movePiece = ({ player, move }) => {
 	const game = getGameForPlayer(player);
 	game.move = move;
+	// TODO: do i need this?
 	game.turn = game.turn === 'white' ? 'black' : 'white';
+};
+
+const setResetGame = (gameId) => {
+	const game = games.find((g) => g.id === gameId);
+	game.resetGame = !game.resetGame;
+	return game;
 };
 
 server.listen(port, () => console.log(`Server listening on port ${port}...`));
