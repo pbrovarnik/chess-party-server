@@ -3,11 +3,13 @@ const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
 
+require('dotenv').config({ path: __dirname + '/.env' });
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
 	cors: {
-		origin: 'https://www.chess-party.com',
+		origin: process.env.CLIENT_URL,
 		methods: ['GET', 'POST'],
 	},
 });
