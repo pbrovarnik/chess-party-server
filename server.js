@@ -1,22 +1,20 @@
 const express = require('express');
-const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
 
-require('dotenv').config({ path: __dirname + '/.env' });
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
 	cors: {
-		origin: process.env.CLIENT_URL,
+		origin: CLIENT_URL,
 		methods: ['GET', 'POST'],
 	},
 });
 const port = process.env.PORT || 5000;
 
 const games = [];
-let nextGameId = 0;
 
 // Create a socket connection
 io.on('connection', (socket) => {
@@ -27,24 +25,26 @@ io.on('connection', (socket) => {
 	socket.emit('games', getGames());
 
 	// Player creates game
-	socket.on('create-game', (gameName) => {
-		const game = createGame({ player: socket, gameName });
-		io.emit('games', getGames());
+	socket.on('create-game', (gameName, roomId) => {
+		socket.join(roomId);
+		const game = createGame({ player: socket, gameName, roomId });
 		socket.emit('your-game-created', game.id);
 		socket.emit('color', 'white');
+		io.emit('games', getGames());
 	});
 
 	// Player joins game from lobby
 	socket.on('join-game', (gameId) => {
+		socket.join(gameId);
 		const game = getGameById(gameId);
-		if (game.numberOfPlayers < 2) {
-			const color = addPlayerToGame({
-				player: socket,
-				gameId,
-			});
-			io.emit('games', getGames());
-			socket.emit('color', color);
-		}
+
+		if (game.numberOfPlayers >= 2) return;
+
+		const color = addPlayerToGame({
+			player: socket,
+			gameId,
+		});
+		socket.emit('color', color);
 		// TODO: try socket.broadcast.emit instead of io.emit
 		io.emit('games', getGames());
 	});
@@ -88,18 +88,18 @@ io.on('connection', (socket) => {
 	});
 });
 
-function createGame({ player, gameName }) {
+function createGame({ player, gameName, roomId }) {
 	const game = {
 		gameName,
 		turn: 'white',
 		players: [
 			{
-				socket: player,
 				color: 'white',
+				socket: player,
 			},
 		],
 		chat: [],
-		id: nextGameId++,
+		id: roomId,
 		playAgain: false,
 		resetGame: false,
 	};
