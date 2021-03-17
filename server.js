@@ -62,6 +62,18 @@ io.on('connection', (socket) => {
 		setResetGame(gameId);
 	});
 
+	// Play again
+	socket.on('play-again', (gameId) => {
+		setPlayAgain(gameId);
+		io.emit('games', getGames());
+	});
+
+	// Cancel play again
+	socket.on('cancel-play-again', (gameId) => {
+		setPlayAgain(gameId);
+		io.emit('games', getGames());
+	});
+
 	// Player disconnects from the website
 	socket.on('disconnect', () => console.log(`Disconnected: ${socket.id}`));
 });
@@ -78,6 +90,7 @@ function createGame({ player, gameName }) {
 		],
 		chat: [],
 		id: nextGameId++,
+		playAgain: false,
 		resetGame: false,
 	};
 	games.push(game);
@@ -115,13 +128,20 @@ const getGameForPlayer = (player) =>
 const movePiece = ({ player, move }) => {
 	const game = getGameForPlayer(player);
 	game.move = move;
-	// TODO: do i need this?
 	game.turn = game.turn === 'white' ? 'black' : 'white';
+};
+
+const setPlayAgain = (gameId) => {
+	const game = games.find((g) => g.id === gameId);
+	game.playAgain = !game.playAgain;
+	return game;
 };
 
 const setResetGame = (gameId) => {
 	const game = games.find((g) => g.id === gameId);
 	game.resetGame = !game.resetGame;
+	game.turn = 'white';
+	game.playAgain = false;
 	return game;
 };
 
