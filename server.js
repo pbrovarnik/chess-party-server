@@ -74,8 +74,18 @@ io.on('connection', (socket) => {
 		io.emit('games', getGames());
 	});
 
+	// Player leaves game
+	socket.on('leave-game', () => {
+		endGame(socket);
+		io.emit('games', getGames());
+	});
+
 	// Player disconnects from the website
-	socket.on('disconnect', () => console.log(`Disconnected: ${socket.id}`));
+	socket.on('disconnect', () => {
+		console.log(`Disconnected: ${socket.id}`);
+		endGame(socket);
+		io.emit('games', getGames());
+	});
 });
 
 function createGame({ player, gameName }) {
@@ -143,6 +153,15 @@ const setResetGame = (gameId) => {
 	game.turn = 'white';
 	game.playAgain = false;
 	return game;
+};
+
+const endGame = (player) => {
+	const game = getGameForPlayer(player);
+	if (!game) return;
+	games.splice(games.indexOf(game), 1);
+	game.players.forEach((currentPlayer) => {
+		if (player !== currentPlayer.socket) currentPlayer.socket.emit('end-game');
+	});
 };
 
 server.listen(port, () => console.log(`Server listening on port ${port}...`));
