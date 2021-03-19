@@ -22,73 +22,103 @@ io.on('connection', (socket) => {
 	console.log(`new connection: ${socket.id}`);
 
 	// Emit all current games and data
-	socket.emit('games', getGames());
+	socket.emit('games', getSanitizedGames());
 
 	// Player creates game
-	socket.on('create-game', (gameName, roomId) => {
-		socket.join(roomId);
-		const game = createGame({ player: socket, gameName, roomId });
+	socket.on('create-game', (gameName, gameId) => {
+		socket.join(gameId);
+		// socket.to(gameId).broadcast.emit('user-connected', socket.id);
+		socket.gameId = gameId;
+
+		const game = createGame({ player: socket, gameName, gameId });
+
 		socket.emit('your-game-created', game.id);
 		socket.emit('color', 'white');
-		io.emit('games', getGames());
+
+		io.emit('games', getSanitizedGames());
 	});
 
 	// Player joins game from lobby
 	socket.on('join-game', (gameId) => {
 		socket.join(gameId);
+		// socket.to(gameId).broadcast.emit('user-connected', socket.id);
+		socket.gameId = gameId;
+		// console.log('!!!', io.sockets.adapter.rooms.get(gameId));
 		const game = getGameById(gameId);
 
-		if (game.numberOfPlayers >= 2) return;
+		if (game.players.length >= 2) return;
 
 		const color = addPlayerToGame({
 			player: socket,
 			gameId,
 		});
+
 		socket.emit('color', color);
 		// TODO: try socket.broadcast.emit instead of io.emit
-		io.emit('games', getGames());
+		io.emit('games', getSanitizedGames());
+	});
+
+	// Player joins video chat
+	socket.on('join-video-chat', (userVideoChatId) => {
+		socket
+			.to(socket.gameId)
+			.broadcast.emit('user-connected-to-video-chat', userVideoChatId);
 	});
 
 	// Player moves piece
 	socket.on('move-piece', (move) => {
-		movePiece({ player: socket, move });
-		io.emit('games', getGames());
+		movePiece({ gameId: socket.gameId, move });
+		io.emit('games', getSanitizedGames());
 	});
 
 	// Reset game
-	socket.on('reset-game', (gameId) => {
-		setResetGame(gameId);
-		io.emit('games', getGames());
-		setResetGame(gameId);
+	socket.on('reset-game', () => {
+		setResetGame(socket.gameId);
+		io.emit('games', getSanitizedGames());
+		setResetGame(socket.gameId);
 	});
 
 	// Play again
-	socket.on('play-again', (gameId) => {
-		setPlayAgain(gameId);
-		io.emit('games', getGames());
+	socket.on('play-again', () => {
+		setPlayAgain(socket.gameId);
+		io.emit('games', getSanitizedGames());
 	});
 
 	// Cancel play again
-	socket.on('cancel-play-again', (gameId) => {
-		setPlayAgain(gameId);
-		io.emit('games', getGames());
+	socket.on('cancel-play-again', () => {
+		setPlayAgain(socket.gameId);
+		io.emit('games', getSanitizedGames());
 	});
 
 	// Player leaves game
 	socket.on('leave-game', () => {
 		endGame(socket);
-		io.emit('games', getGames());
+		io.emit('games', getSanitizedGames());
+	});
+
+	// Connect to video chat
+	socket.on('make-call', () => {
+		socket.to(socket.gameId).broadcast.emit('making-call');
+	});
+
+	socket.on('call-user', (signalData) => {
+		socket.to(socket.gameId).broadcast.emit('user-called', signalData);
+	});
+
+	socket.on('accept-call', (signalData) => {
+		socket.to(socket.gameId).broadcast.emit('call-accepted', signalData);
 	});
 
 	// Player disconnects from the website
 	socket.on('disconnect', () => {
 		console.log(`Disconnected: ${socket.id}`);
 		endGame(socket);
-		io.emit('games', getGames());
+		io.emit('games', getSanitizedGames());
 	});
 });
 
-function createGame({ player, gameName, roomId }) {
+// Creates initial game data
+const createGame = ({ player, gameName, gameId }) => {
 	const game = {
 		gameName,
 		turn: 'white',
@@ -99,30 +129,25 @@ function createGame({ player, gameName, roomId }) {
 			},
 		],
 		chat: [],
-		id: roomId,
+		id: gameId,
 		playAgain: false,
 		resetGame: false,
 	};
 	games.push(game);
 	return game;
-}
+};
 
-function getGames() {
-	return games.map((g) => {
-		const { players, ...game } = g;
-		return {
-			...game,
-			numberOfPlayers: players.length,
-		};
-	});
-}
+// Return all current games without socket info
+const getSanitizedGames = () =>
+	games.map(({ players, ...game }) => ({
+		...game,
+		numberOfPlayers: players.length,
+	}));
 
-function getGameById(gameId) {
-	return getGames().find((g) => g.id === gameId);
-}
+const getGameById = (gameId) => games.find((game) => game.id === gameId);
 
-function addPlayerToGame({ player, gameId }) {
-	const game = games.find((g) => g.id === gameId);
+const addPlayerToGame = ({ player, gameId }) => {
+	const game = getGameById(gameId);
 
 	game.players.push({
 		color: 'black',
@@ -130,25 +155,22 @@ function addPlayerToGame({ player, gameId }) {
 	});
 
 	return 'black';
-}
+};
 
-const getGameForPlayer = (player) =>
-	games.find((g) => g.players.find((p) => p.socket === player));
-
-const movePiece = ({ player, move }) => {
-	const game = getGameForPlayer(player);
+const movePiece = ({ gameId, move }) => {
+	const game = getGameById(gameId);
 	game.move = move;
 	game.turn = game.turn === 'white' ? 'black' : 'white';
 };
 
 const setPlayAgain = (gameId) => {
-	const game = games.find((g) => g.id === gameId);
+	const game = getGameById(gameId);
 	game.playAgain = !game.playAgain;
 	return game;
 };
 
 const setResetGame = (gameId) => {
-	const game = games.find((g) => g.id === gameId);
+	const game = getGameById(gameId);
 	game.resetGame = !game.resetGame;
 	game.turn = 'white';
 	game.playAgain = false;
@@ -156,7 +178,7 @@ const setResetGame = (gameId) => {
 };
 
 const endGame = (player) => {
-	const game = getGameForPlayer(player);
+	const game = getGameById(player.gameId);
 	if (!game) return;
 	games.splice(games.indexOf(game), 1);
 	game.players.forEach((currentPlayer) => {
