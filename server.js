@@ -27,7 +27,7 @@ io.on('connection', (socket) => {
 	// Player creates game
 	socket.on('create-game', (gameName, gameId) => {
 		socket.join(gameId);
-		// socket.to(gameId).broadcast.emit('user-connected', socket.id);
+		console.log(`user id: ${socket.id} joined game: ${gameId}`);
 		socket.gameId = gameId;
 
 		const game = createGame({ player: socket, gameName, gameId });
@@ -41,7 +41,7 @@ io.on('connection', (socket) => {
 	// Player joins game from lobby
 	socket.on('join-game', (gameId) => {
 		socket.join(gameId);
-		// socket.to(gameId).broadcast.emit('user-connected', socket.id);
+		console.log(`user id: ${socket.id} joined game: ${gameId}`);
 		socket.gameId = gameId;
 		// console.log('!!!', io.sockets.adapter.rooms.get(gameId));
 		const game = getGameById(gameId);
@@ -56,13 +56,6 @@ io.on('connection', (socket) => {
 		socket.emit('color', color);
 		// TODO: try socket.broadcast.emit instead of io.emit
 		io.emit('games', getSanitizedGames());
-	});
-
-	// Player joins video chat
-	socket.on('join-video-chat', (userVideoChatId) => {
-		socket
-			.to(socket.gameId)
-			.broadcast.emit('user-connected-to-video-chat', userVideoChatId);
 	});
 
 	// Player moves piece
@@ -92,7 +85,10 @@ io.on('connection', (socket) => {
 
 	// Player leaves game
 	socket.on('leave-game', () => {
+		console.log(`user id: ${socket.id} leaving game: ${socket.gameId}`);
 		endGame(socket);
+		socket.leave(socket.gameId);
+		socket.gameId = null;
 		io.emit('games', getSanitizedGames());
 	});
 
@@ -107,6 +103,14 @@ io.on('connection', (socket) => {
 
 	socket.on('accept-call', (signalData) => {
 		socket.to(socket.gameId).broadcast.emit('call-accepted', signalData);
+	});
+
+	socket.on('cancel-call', () => {
+		socket.to(socket.gameId).broadcast.emit('call-cancelled');
+	});
+
+	socket.on('end-call', () => {
+		socket.to(socket.gameId).broadcast.emit('call-ended');
 	});
 
 	// Player disconnects from the website
