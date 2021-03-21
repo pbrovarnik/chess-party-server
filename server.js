@@ -32,9 +32,7 @@ io.on('connection', (socket) => {
 
 		const game = createGame({ player: socket, gameName, gameId });
 
-		socket.emit('your-game-created', game.id);
-		socket.emit('color', 'white');
-
+		io.sockets.in(socket.gameId).emit('your-game-created', game.id);
 		io.emit('games', getSanitizedGames());
 	});
 
@@ -43,18 +41,16 @@ io.on('connection', (socket) => {
 		socket.join(gameId);
 		console.log(`user id: ${socket.id} joined game: ${gameId}`);
 		socket.gameId = gameId;
-		// console.log('!!!', io.sockets.adapter.rooms.get(gameId));
 		const game = getGameById(gameId);
 
 		if (game.players.length >= 2) return;
 
-		const color = addPlayerToGame({
+		addPlayerToGame({
 			player: socket,
 			gameId,
 		});
 
-		socket.emit('color', color);
-		// TODO: try socket.broadcast.emit instead of io.emit
+		io.sockets.in(socket.gameId).emit('game-joined');
 		io.emit('games', getSanitizedGames());
 	});
 
@@ -157,8 +153,6 @@ const addPlayerToGame = ({ player, gameId }) => {
 		color: 'black',
 		socket: player,
 	});
-
-	return 'black';
 };
 
 const movePiece = ({ gameId, move }) => {
