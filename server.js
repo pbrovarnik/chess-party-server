@@ -30,9 +30,8 @@ io.on('connection', (socket) => {
 		console.log(`user id: ${socket.id} joined game: ${gameId}`);
 		socket.gameId = gameId;
 
-		const game = createGame({ player: socket, gameName, gameId });
-
-		io.sockets.in(socket.gameId).emit('your-game-created', game.id);
+		createGame({ player: socket, gameName, gameId });
+		updateGame(io, socket);
 		io.emit('games', getSanitizedGames());
 	});
 
@@ -41,8 +40,8 @@ io.on('connection', (socket) => {
 		socket.join(gameId);
 		console.log(`user id: ${socket.id} joined game: ${gameId}`);
 		socket.gameId = gameId;
-		const game = getGameById(gameId);
 
+		const game = getGameById(gameId);
 		if (game.players.length >= 2) return;
 
 		addPlayerToGame({
@@ -50,33 +49,33 @@ io.on('connection', (socket) => {
 			gameId,
 		});
 
-		io.sockets.in(socket.gameId).emit('game-joined');
+		updateGame(io, socket);
 		io.emit('games', getSanitizedGames());
 	});
 
 	// Player moves piece
 	socket.on('move-piece', (move) => {
 		movePiece({ gameId: socket.gameId, move });
-		io.emit('games', getSanitizedGames());
+		updateGame(io, socket);
 	});
 
 	// Reset game
 	socket.on('reset-game', () => {
 		setResetGame(socket.gameId);
-		io.emit('games', getSanitizedGames());
+		updateGame(io, socket);
 		setResetGame(socket.gameId);
 	});
 
 	// Play again
 	socket.on('play-again', () => {
 		setPlayAgain(socket.gameId);
-		io.emit('games', getSanitizedGames());
+		updateGame(io, socket);
 	});
 
 	// Cancel play again
 	socket.on('cancel-play-again', () => {
 		setPlayAgain(socket.gameId);
-		io.emit('games', getSanitizedGames());
+		updateGame(io, socket);
 	});
 
 	// Player leaves game
@@ -144,6 +143,16 @@ const getSanitizedGames = () =>
 		numberOfPlayers: players.length,
 	}));
 
+// Return current game without socket info
+const sanitizedGame = ({ players, ...game }) => {
+	const sanitizedplayers = players.map(({ color, socket }) => ({
+		color,
+		playerId: socket.id,
+	}));
+
+	return { ...game, players: sanitizedplayers, numberOfPlayers: players.length };
+};
+
 const getGameById = (gameId) => games.find((game) => game.id === gameId);
 
 const addPlayerToGame = ({ player, gameId }) => {
@@ -153,6 +162,11 @@ const addPlayerToGame = ({ player, gameId }) => {
 		color: 'black',
 		socket: player,
 	});
+};
+
+const updateGame = (io, socket) => {
+	const game = sanitizedGame(getGameById(socket.gameId));
+	io.sockets.in(socket.gameId).emit('game-updated', game);
 };
 
 const movePiece = ({ gameId, move }) => {
