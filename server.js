@@ -50,6 +50,8 @@ io.on('connection', (socket) => {
 		});
 
 		updateGame(io, socket);
+		io.sockets.in(socket.gameId).emit('chat-updated', game.chat);
+
 		io.emit('games', getSanitizedGames());
 	});
 
@@ -108,6 +110,11 @@ io.on('connection', (socket) => {
 		socket.to(socket.gameId).broadcast.emit('call-ended');
 	});
 
+	// Send a chat message
+	socket.on('send-message', (msg) => {
+		updateChat(io, socket, msg);
+	});
+
 	// Player disconnects from the website
 	socket.on('disconnect', () => {
 		console.log(`Disconnected: ${socket.id}`);
@@ -127,7 +134,7 @@ const createGame = ({ player, gameName, gameId }) => {
 				socket: player,
 			},
 		],
-		chat: [],
+		chat: [{ player: 'admin', text: 'Welcome to the game!' }],
 		id: gameId,
 		playAgain: false,
 		resetGame: false,
@@ -147,7 +154,7 @@ const getSanitizedGames = () =>
 const sanitizedGame = ({ players, ...game }) => {
 	const sanitizedplayers = players.map(({ color, socket }) => ({
 		color,
-		playerId: socket.id,
+		id: socket.id,
 	}));
 
 	return { ...game, players: sanitizedplayers, numberOfPlayers: players.length };
@@ -167,6 +174,13 @@ const addPlayerToGame = ({ player, gameId }) => {
 const updateGame = (io, socket) => {
 	const game = sanitizedGame(getGameById(socket.gameId));
 	io.sockets.in(socket.gameId).emit('game-updated', game);
+};
+
+const updateChat = (io, socket, msg) => {
+	const game = sanitizedGame(getGameById(socket.gameId));
+	const { color } = game.players.find((player) => player.id === socket.id);
+	game.chat.push({ player: color, text: msg });
+	io.sockets.in(socket.gameId).emit('chat-updated', game.chat);
 };
 
 const movePiece = ({ gameId, move }) => {
