@@ -20,15 +20,10 @@ const {
 	onDisconnect,
 } = require('./handlers');
 
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
-
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
-	cors: {
-		origin: CLIENT_URL,
-		methods: ['GET', 'POST'],
-	},
+	transports: ['websocket'],
 });
 
 const port = process.env.PORT || 5000;
